@@ -1,4 +1,9 @@
 Changes
+inc/EUDeps/B/Hooks/OP/Check/Install/Files.pm
+inc/EUDeps/B/Hooks/OP/Check/Install/hook_op_check.h
+inc/EUDeps/B/Hooks/OP/PPAddr/Install/Files.pm
+inc/EUDeps/B/Hooks/OP/PPAddr/Install/hook_op_ppaddr.h
+inc/EUDeps/ExtUtils/Depends.pm
 inc/Module/AutoInstall.pm
 inc/Module/Install.pm
 inc/Module/Install/AutoInstall.pm
