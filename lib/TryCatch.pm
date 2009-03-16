@@ -12,13 +12,12 @@ use Parse::Method::Signatures;
 use Moose::Util::TypeConstraints;
 use Scope::Upper qw/unwind want_at :words/;
 use TryCatch::Exception;
-use TryCatch::TypeParser;
 use Carp qw/croak/;
 
 use base 'DynaLoader';
 
 
-our $VERSION = '1.000001';
+our $VERSION = '1.000002';
 our $PARSE_CATCH_NEXT = 0;
 our ($CHECK_OP_HOOK, $CHECK_OP_DEPTH) = (undef, 0);
 
@@ -185,7 +184,17 @@ sub _parse_catch {
   # optional ()
   if (substr($linestr, $ctx->offset, 1) eq '(') {
     my $substr = substr($linestr, $ctx->offset+1);
-    my ($param, $left) = Parse::Method::Signatures->param($substr);
+    my $sig = Parse::Method::Signatures->new(
+      input => $substr,
+      from_namespace => $pack,
+    );
+    my $errctx = $sig->ppi;
+    my $param = $sig->param;
+
+    $sig->error( $errctx, "Parameter expected")
+      unless $param;
+
+    my $left = $sig->remaining_input;
 
     die "can't handle un-named vars yet" unless $param->can('variable_name');
 
@@ -194,8 +203,7 @@ sub _parse_catch {
 
     # (TC $var)
     if ($param->has_type_constraints) {
-      my $parser = TryCatch::TypeParser->new(package => $pack);
-      my $tc = $parser->visit($param->type_constraints->data);
+      my $tc = $param->meta_type_constraint;
       $TC_LIBRARY->{"$tc"} = $tc;
       push @conditions, "'$tc'";
     }
@@ -305,7 +313,7 @@ the type constraints (if any) will executed.
 =head1 BENEFITS
 
 B<return>. You can put a return in a try block, and it would do the right thing
-- namely return a value from the sub routinte you are in, instead of just from
+- namely return a value from the subroutine you are in, instead of just from
 the eval block. 
 
 B<Type Checking>. This is nothing you couldn't do manually yourself, it does it

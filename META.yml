@@ -1,34 +1,44 @@
----
-abstract: 'first class try catch semantics for Perl, without source filters.'
-author:
-  - 'Ash Berlin <ash@cpan.org>'
-configure_requires:
-  B::Hooks::OP::Check: 0.15
-  B::Hooks::OP::PPAddr: 0.02
-  ExtUtils::Depends: 0
-distribution_type: module
-generated_by: 'Module::Install version 0.790'
-license: perl
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
-name: TryCatch
-no_index:
-  directory:
-    - inc
-    - t
-requires:
-  B::Hooks::EndOfScope: 0.05
-  B::Hooks::OP::Check: 0.15
-  B::Hooks::OP::PPAddr: 0.02
-  Devel::Declare: 0.003004
-  Moose: 0
-  MooseX::Types::Moose: 0
-  Parse::Method::Signatures: 1.001000
-  Scope::Upper: 0.06
-  Variable::Magic: 0.28
-  perl: 5.8.1
-resources:
-  license: http://dev.perl.org/licenses/
-  repository: http://github.com/ashb/trycatch/tree/master
-version: 1.000001
+{
+   "no_index" : {
+      "directory" : [
+         "inc",
+         "t"
+      ]
+   },
+   "resources" : {
+      "repository" : "http://github.com/ashb/trycatch/tree/master",
+      "license" : "http://dev.perl.org/licenses/"
+   },
+   "meta-spec" : {
+      "version" : 1.4,
+      "url" : "http://module-build.sourceforge.net/META-spec-v1.4.html"
+   },
+   "generated_by" : "Module::Install version 0.790",
+   "distribution_type" : "module",
+   "writen_by" : "Module::Install::JSONMETA version 3.000",
+   "version" : "1.000002",
+   "name" : "TryCatch",
+   "author" : [
+      "Ash Berlin <ash@cpan.org>"
+   ],
+   "license" : "perl",
+   "requires" : {
+      "MooseX::Types::Moose" : 0,
+      "Scope::Upper" : 0.06,
+      "Parse::Method::Signatures" : "1.003003",
+      "Sub::Exporter" : 0.979,
+      "B::Hooks::EndOfScope" : 0.05,
+      "perl" : "5.8.1",
+      "B::Hooks::OP::Check" : 0.15,
+      "B::Hooks::OP::PPAddr" : 0.02,
+      "Variable::Magic" : 0.28,
+      "Devel::Declare" : "0.003004",
+      "Moose" : 0
+   },
+   "abstract" : "first class try catch semantics for Perl, without source filters.",
+   "configure_requires" : {
+      "B::Hooks::OP::Check" : 0.15,
+      "B::Hooks::OP::PPAddr" : 0.02,
+      "ExtUtils::Depends" : 0
+   }
+}
