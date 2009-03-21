@@ -11,7 +11,6 @@ STATIC I32
 dump_cxstack()
 {
   //dVAR;
-  SV* sv;
   I32 i;
   for (i = cxstack_ix; i >= 0; i--) {
     register const PERL_CONTEXT * const cx = cxstack+i;
@@ -21,7 +20,7 @@ dump_cxstack()
     case CXt_EVAL:
     case CXt_FORMAT:
     case CXt_SUB:
-        printf("***\n* cx stack %d\n", i);
+        printf("***\n* cx stack %d\n", (int)i);
         sv_dump((SV*)cx->blk_sub.cv); 
     }
   }
@@ -34,6 +33,7 @@ STATIC OP* unwind_return (pTHX_ OP *op, void *user_data) {
   SV* ctx;
   CV *unwind;
 
+  PERL_UNUSED_VAR(op);
   PERL_UNUSED_VAR(user_data);
 
   ctx = get_sv("TryCatch::Exception::CTX", 0);
@@ -52,7 +52,7 @@ STATIC OP* unwind_return (pTHX_ OP *op, void *user_data) {
 
   if (trycatch_debug) {
     dump_cxstack();
-    printf("unwinding to %d\n", SvIV(*sp));
+    printf("unwinding to %d\n", (int)SvIV(*sp));
 
   }
 
@@ -79,6 +79,8 @@ STATIC OP* check_return (pTHX_ OP *op, void *user_data) {
 }
 
 MODULE = TryCatch PACKAGE = TryCatch::XS
+
+PROTOTYPES: DISABLE
 
 void 
 install_return_op_check()
