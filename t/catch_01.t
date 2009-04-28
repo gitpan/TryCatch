@@ -3,7 +3,6 @@ use warnings;
 use Test::More tests => 7;
 
 BEGIN { use_ok "TryCatch" or BAIL_OUT("Cannot load TryCatch") };
-#use TryCatch;
 
 sub simple_no_die {
   try {
@@ -17,6 +16,7 @@ sub simple_no_die {
   return "bar";
 }
 
+is(simple_no_die(), "simple_return", "simple_return");
 
 sub simple_die {
   my $msg = "no error";
@@ -34,6 +34,8 @@ sub simple_die {
 
   return $msg;
 }
+is(simple_die(), "We got a long Str error of 'Some str'", "simple_die");
+
 
 sub simple_catch_type {
   my @args = @_;
@@ -42,11 +44,16 @@ sub simple_catch_type {
   }
   catch (ArrayRef[Int] $array) {
     return "Got an array of @$array";
+    fail("didn't unwind");
   }
   catch ($e) {
     return "Got otherwise";
   }
+  fail("didn't unwind or catch");
 }
+is(simple_catch_type([1,2,3]), "Got an array of 1 2 3", "simple_catch_type");
+is(simple_catch_type(''), "Got otherwise", "simple_catch_type");
+
 
 sub catch_args {
   try {
@@ -61,16 +68,7 @@ sub catch_args {
   }
 }
 
-is(simple_no_die(), "simple_return", "simple_return");
-is(simple_die(), "We got a long Str error of 'Some str'", "simple_die");
 
-is(simple_catch_type([1,2,3]), "Got an array of 1 2 3", "simple_catch_type");
-is(simple_catch_type(''), "Got otherwise", "simple_catch_type");
-
-
-{
-local $TODO = 'sort out @_ bug';
 is(catch_args([1,2,3]), "Got an array of 1 2 3", "simple_catch_type");
-}
 is(catch_args(''), "Got otherwise", "simple_catch_type");
 

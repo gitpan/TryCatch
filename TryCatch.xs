@@ -21,7 +21,7 @@ dump_cxstack()
     case CXt_FORMAT:
     case CXt_SUB:
         printf("***\n* cx stack %d\n", (int)i);
-        sv_dump((SV*)cx->blk_sub.cv); 
+        sv_dump((SV*)cx->blk_sub.cv);
     }
   }
   return i;
@@ -36,16 +36,18 @@ STATIC OP* unwind_return (pTHX_ OP *op, void *user_data) {
   PERL_UNUSED_VAR(op);
   PERL_UNUSED_VAR(user_data);
 
-  ctx = get_sv("TryCatch::Exception::CTX", 0);
+  ctx = get_sv("TryCatch::CTX", 0);
   if (ctx) {
-    XPUSHs(ctx);
+    XPUSHs( ctx );
     PUTBACK;
   } else {
+    if (trycatch_debug) {
+      printf("No ctx, making it up\n");
+    }
     PUSHMARK(SP);
-    XPUSHs(sv_2mortal(newSViv(4)));
     PUTBACK;
 
-    call_pv("Scope::Upper::CALLER", G_SCALAR);
+    call_pv("Scope::Upper::UP", G_SCALAR);
 
     SPAGAIN;
   }
@@ -59,7 +61,7 @@ STATIC OP* unwind_return (pTHX_ OP *op, void *user_data) {
 
   // call_pv("Scope::Upper::unwind", G_VOID);
   // Can't use call_sv et al. since it resets PL_op.
- 
+
   unwind = get_cv("Scope::Upper::unwind", 0);
   XPUSHs( (SV*)unwind);
   PUTBACK;
@@ -69,7 +71,7 @@ STATIC OP* unwind_return (pTHX_ OP *op, void *user_data) {
 
 // Hook the OP_RETURN iff we are in hte same file as originally compiling.
 STATIC OP* check_return (pTHX_ OP *op, void *user_data) {
-  
+
   const char* file = SvPV_nolen( (SV*)user_data );
   const char* cur_file = CopFILE(&PL_compiling);
   if (strcmp(file, cur_file))
@@ -82,7 +84,7 @@ MODULE = TryCatch PACKAGE = TryCatch::XS
 
 PROTOTYPES: DISABLE
 
-void 
+void
 install_return_op_check()
   CODE:
     // Code stole from Scalar::Util::dualvar
@@ -120,7 +122,13 @@ SV* id
     //SvREFCNT_dec( id );
   OUTPUT:
 
+void dump_stack()
+  CODE:
+    dump_cxstack();
+  OUTPUT:
+
 BOOT:
-  if (getenv ("TRYCATCH_DEBUG")) {
+  char *debug = getenv ("TRYCATCH_DEBUG");
+  if (debug && atoi(debug) >= 2) {
     trycatch_debug = 1;
   }
