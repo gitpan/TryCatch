@@ -23,7 +23,7 @@ no_index:
 provides:
   TryCatch:
     file: lib/TryCatch.pm
-    version: 1.001000
+    version: 1.001001
 requires:
   B::Hooks::EndOfScope: 0.05
   B::Hooks::OP::Check: 0.15
@@ -41,4 +41,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: http://github.com/ashb/trycatch/tree/master
-version: 1.001000
+version: 1.001001
