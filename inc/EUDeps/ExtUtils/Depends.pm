@@ -1,5 +1,5 @@
 #
-# $Header: /cvsroot/gtk2-perl/gtk2-perl-xs/ExtUtils-Depends/lib/ExtUtils/Depends.pm,v 1.18 2008/03/30 15:36:23 kaffeetisch Exp $
+# $Id$
 #
 
 package ExtUtils::Depends;
@@ -11,7 +11,7 @@ use File::Find;
 use File::Spec;
 use Data::Dumper;
 
-our $VERSION = '0.300';
+our $VERSION = '0.302';
 
 sub import {
 	my $class = shift;
@@ -282,6 +282,8 @@ sub get_makefile_vars {
 		TYPEMAPS => [@typemaps],
 	);
 
+	$self->build_dll_lib(\%vars) if $^O =~ /MSWin32/;
+
 	# we don't want to provide these if there is no data in them;
 	# that way, the caller can still get default behavior out of
 	# MakeMaker when INC, LIBS and TYPEMAPS are all that are required.
@@ -297,12 +299,19 @@ sub get_makefile_vars {
 	%vars;
 }
 
+sub build_dll_lib {
+	my ($self, $vars) = @_;
+	$vars->{macro} ||= {};
+	$vars->{macro}{'INST_DYNAMIC_LIB'} =
+		'$(INST_ARCHAUTODIR)/$(BASEEXT)$(LIB_EXT)';
+}
+
 sub find_extra_libs {
 	my $self = shift;
 
 	my %mappers = (
-		MSWin32 => sub { $_[0] . '.lib' },
-		cygwin  => sub { 'lib' . $_[0] . '.dll.a'},
+		MSWin32 => sub { $_[0] . '\.(?:lib|a)' },
+		cygwin	=> sub { $_[0] . '\.dll'},
 	);
 	my $mapper = $mappers{$^O};
 	return () unless defined $mapper;
@@ -313,20 +322,41 @@ sub find_extra_libs {
 		my $lib = $mapper->($stem);
 		my $pattern = qr/$lib$/;
 
+		my $matching_dir;
 		my $matching_file;
 		find (sub {
 			if ((not $matching_file) && /$pattern/) {;
+				$matching_dir = $File::Find::dir;
 				$matching_file = $File::Find::name;
 			}
 		}, map { -d $_ ? ($_) : () } @INC); # only extant dirs
 
 		if ($matching_file && -f $matching_file) {
-			push @found_libs, $matching_file;
+			push @found_libs, ('-L' . $matching_dir, '-l' . $stem);
 			next;
 		}
 	}
 
 	return @found_libs;
+}
+
+# Hook into ExtUtils::MakeMaker to create an import library on MSWin32 when gcc
+# is used.  FIXME: Ideally, this should be done in EU::MM itself.
+package # wrap to fool the CPAN indexer
+	ExtUtils::MM;
+use Config;
+sub static_lib {
+	my $base = shift->SUPER::static_lib(@_);
+
+	return $base unless $^O =~ /MSWin32/ && $Config{cc} =~ /^gcc/i;
+
+	return <<'__EOM__';
+# This isn't actually a static lib, it just has the same name on Win32.
+$(INST_DYNAMIC_LIB): $(INST_DYNAMIC)
+	dlltool --def $(EXPORT_LIST) --output-lib $@ --dllname $(BASEEXT).$(SO) $(INST_DYNAMIC)
+
+dynamic:: $(INST_DYNAMIC_LIB)
+__EOM__
 }
 
 1;

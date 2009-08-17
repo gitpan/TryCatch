@@ -17,10 +17,14 @@ use XSLoader;
 use base qw/Devel::Declare::Context::Simple/;
 
 
-our $VERSION = '1.001001';
+our $VERSION = '1.001001_99';
 
 # These are private state variables. Mess with them at your peril
 our ($CHECK_OP_HOOK, $CHECK_OP_DEPTH) = (undef, 0);
+our $NEXT_EVAL_IS_TRY;
+
+# Stack of state for tacking nested. Each value is number of catch blocks at
+# the current level. We are nested if @STATE > 1
 our (@STATE);
 
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -33,6 +37,9 @@ use Sub::Exporter -setup => {
   installer => sub {
     my ($args, $to_export) = @_;
     my $pack = $args->{into};
+
+    TryCatch::XS::install_try_op_check();
+
     foreach my $name (@$to_export) {
       if (my $parser = __PACKAGE__->can("_parse_${name}")) {
         Devel::Declare->setup_for(
@@ -49,7 +56,6 @@ use Sub::Exporter -setup => {
 
 # The actual try call itself. Nothing to do with parsing.
 sub try () {
-  warn "non-shadowed - shouldn't happen";
   return;
 }
 
@@ -88,28 +94,30 @@ sub _parse_try {
   $ctx->shadow(sub () { } );
 
   $ctx->inject_if_block(
-    $ctx->injected_try_code . $ctx->scope_injector_call,
+    $ctx->injected_try_code . $ctx->scope_injector_call('{}'),
     q#;#
   ) or croak "block required after try";
 
   #$ctx->debug_linestr("try");
-  if (! $CHECK_OP_DEPTH++) {
+  if (! $CHECK_OP_DEPTH) {
+    $CHECK_OP_DEPTH++;
     $CHECK_OP_HOOK = TryCatch::XS::install_return_op_check();
   }
 
   $ctx->debug_linestr('post try');
 
   # Number of catch blocks found, we only care about 0,1 and +1 cases tho
-  push @STATE, 0;
+  $ctx->state_new_block();
   
 }
+
 
 sub injected_try_code {
   # try { ...
   # ->
   # try; { local $@; eval { ...
 
-  return @STATE > 1
+  return $_[0]->state_is_nested()
        ? 'local $TryCatch::CTX = Scope::Upper::HERE; eval {' # Nested case
        : 'local $@; eval {'
 }
@@ -120,10 +128,34 @@ sub injected_after_try {
 }
 
 sub injected_no_catch_code {
-  return "};";
+  # This undef is to ensure that there is the eval{}; is called in void context
+  # i.e that its not the last op in a subroutine
+  return "};undef;";
 }
 
+sub injected_post_catch_code {
+  # We do it like this so that PROPGATE gets called, in case anyone is using it
+  return 'else { $@ = $TryCatch::Error; die } };undef;';
+}
+
+
+sub scope_injector_call {
+  my $self = shift;
+  my $inject = shift;
+  return ' BEGIN { ' . ref($self) . "->inject_scope(${inject}) }; ";
+}
+
+
 sub inject_scope {
+  my ($class, $opts) = @_;
+
+  if ($opts->{hook}) {
+    if (! $CHECK_OP_DEPTH) {
+      $CHECK_OP_DEPTH++;
+      $CHECK_OP_HOOK = TryCatch::XS::install_return_op_check();
+    }
+  }
+
   on_scope_end { 
     block_postlude() 
   }
@@ -153,6 +185,7 @@ sub block_postlude {
 
   if ($CHECK_OP_DEPTH && --$CHECK_OP_DEPTH == 0) {
     TryCatch::XS::uninstall_return_op_check($CHECK_OP_HOOK);
+    $CHECK_OP_HOOK = '';
   }
 
   if ($toke eq 'catch') {
@@ -162,9 +195,16 @@ sub block_postlude {
     $ctx->_parse_catch;
 
   } else  {
-    my $code = $STATE[-1] == 0
-             ? $ctx->injected_no_catch_code
-             : '}';
+
+    # No (more) catch blocks, so write the postlude
+    my $code;
+    if ($ctx->state_have_catch_block) {
+      $code = $ctx->injected_post_catch_code;
+    }
+    else {
+      $code = $ctx->injected_no_catch_code;
+      $NEXT_EVAL_IS_TRY = 1;
+    }
 
     substr($linestr, $offset, 0, $code);
 
@@ -173,7 +213,7 @@ sub block_postlude {
     $ctx->debug_linestr("finalizer");
 
     # This try/catch stmt is finished
-    pop @STATE;
+    $ctx->state_end_block();
   }
 }
 
@@ -182,98 +222,131 @@ sub block_postlude {
 # the '->' is added by one of the postlude hooks
 sub _parse_catch {
   my $ctx = shift;
-  my $pack = $ctx->get_curstash_name;
-
 
   # Hide Devel::Declare from carp;
   local $Carp::Internal{'Devel::Declare'} = 1;
   local $Carp::Internal{'B::Hooks::EndOfScope'} = 1;
   local $Carp::Internal{'TryCatch'} = 1;
 
-  # This isn't a normal DD-callback, so we can strip_name to get rid of try
+  # This isn't a normal DD-callback, so we can strip_name to get rid of 'catch'
   my $offset = $ctx->offset;
   $ctx->strip_name;
   $ctx->skipspace;
-  my $new_offset = $ctx->offset;
  
   $ctx->debug_linestr('catch');
   my $linestr = $ctx->get_linestr;
 
-  my $code;
-  my $var_code = "";
+  my ($code, $var_code, @conditions) = ("","");
 
-  my @conditions;
   # optional ()
   if (substr($linestr, $ctx->offset, 1) eq '(') {
-    my $proto = $ctx->strip_proto;
-    croak "Run-away catch signature"
-      unless (length $proto);
-    
-    my $sig = Parse::Method::Signatures->new(
-      input => $proto,
-      from_namespace => $pack,
-    );
-    my $errctx = $sig->ppi;
-    my $param = $sig->param;
-
-    $sig->error( $errctx, "Parameter expected")
-      unless $param;
-
-    my $left = $sig->remaining_input;
-
-    croak "TryCatch can't handle un-named vars in catch signature" 
-      unless $param->can('variable_name');
-
-    my $name = $param->variable_name;
-    $var_code = "my $name = \$TryCatch::Error;";
-
-    # (TC $var)
-    if ($param->has_type_constraints) {
-      my $tc = $param->meta_type_constraint;
-      $TC_LIBRARY->{"$tc"} = $tc;
-      push @conditions, "TryCatch->check_tc('$tc')";
-    }
-
-    # ($var where { $_ } )
-    if ($param->has_constraints) {
-      foreach my $con (@{$param->constraints}) {
-        $con =~ s/^{|}$//g;
-        push @conditions, "do {local \$_ = \$TryCatch::Error; $con }";
-      }
-    }
-
-    $linestr = $ctx->get_linestr;
+    ($var_code, @conditions) = $ctx->parse_proto()
   }
 
-  $code = $ctx->injected_after_try
-    if $STATE[-1] == 0;
+  @conditions = ('1') unless @conditions;
 
-  @conditions = ('1')
-    unless @conditions;
+  unless ($ctx->state_have_catch_block()) {
+    $NEXT_EVAL_IS_TRY = 1;
+    $code = $ctx->injected_after_try
+          . "if (";
+  }
+  else {
+    $code = "elsif (";
+  }
 
-  $code .= $STATE[-1] < 1
-         ? "if ("
-         : "elsif (";
+  $var_code = $ctx->scope_injector_call( 
+    $ctx->state_is_nested() ? '{hook => 1}' : '{}'
+  ) . $var_code;
 
   $ctx->inject_if_block(
-    $ctx->scope_injector_call . $var_code,
+    $var_code,
     $code . join(' && ', @conditions) . ')'
   ) or croak "block required after catch";
 
   $ctx->debug_linestr('post catch');
 
-  #if (! $CHECK_OP_DEPTH++) {
-  #  $CHECK_OP_HOOK = TryCatch::XS::install_return_op_check();
-  #}
+  $ctx->state_parsed_catch();
+}
 
+sub parse_proto {
+  my ($self) = @_;
+
+  my $proto = $self->strip_proto;
+  croak "Run-away catch signature"
+    unless (length $proto);
+
+  return $self->parse_proto_using_pms($proto);
+}
+
+sub parse_proto_using_pms {
+  my ($self, $proto) = @_;
+
+  my @conditions;
+
+  my $sig = Parse::Method::Signatures->new(
+    input => $proto,
+    from_namespace => $self->get_curstash_name,
+  );
+  my $errctx = $sig->ppi;
+  my $param = $sig->param;
+
+  $sig->error( $errctx, "Parameter expected")
+    unless $param;
+
+  my $left = $sig->remaining_input;
+
+  croak "TryCatch can't handle un-named vars in catch signature"
+    unless $param->can('variable_name');
+
+  my $name = $param->variable_name;
+  my $var_code = "my $name = \$TryCatch::Error;";
+
+  # (TC $var)
+  if ($param->has_type_constraints) {
+    my $tc = $param->meta_type_constraint;
+    $TC_LIBRARY->{"$tc"} = $tc;
+    push @conditions, "TryCatch->check_tc('$tc')";
+  }
+
+  # ($var where { $_ } )
+  if ($param->has_constraints) {
+    foreach my $con (@{$param->constraints}) {
+      $con =~ s/^{|}$//g;
+      push @conditions, "do {local \$_ = \$TryCatch::Error; $con }";
+    }
+  }
+
+  return $var_code, @conditions;
+}
+
+# Functions that wrap @STATE maniuplation into useful names
+sub state_new_block {
+  push @STATE, 0;
+  return
+}
+
+sub state_end_block {
+  pop @STATE;
+  return;
+}
+
+sub state_is_nested {
+  return @STATE > 1;
+}
+
+sub state_have_catch_block {
+  return $STATE[-1] > 0;
+}
+
+sub state_parsed_catch {
   $STATE[-1]++;
 }
 
-sub debug_linestr {
+*debug_linestr = !( ($ENV{TRYCATCH_DEBUG} || 0) & 1)
+               ? sub {}
+               : sub {
   my ($ctx, $message) = @_;
 
-  return unless $ENV{TRYCATCH_DEBUG};
- 
   local $Carp::Internal{'TryCatch'} = 1;
   local $Carp::Internal{'Devel::Declare'} = 1;
   local $Carp::Internal{'B::Hooks::EndOfScope'} = 1;
@@ -284,7 +357,7 @@ sub debug_linestr {
 
   warn   "  Substr: ", Devel::PartialDump::dump(substr($ctx->get_linestr, $ctx->offset)),
        "\n  Whole:  ", Devel::PartialDump::dump($ctx->get_linestr), "\n\n";
-}
+};
 
 
 1;
@@ -294,6 +367,14 @@ __END__
 =head1 NAME
 
 TryCatch - first class try catch semantics for Perl, without source filters.
+
+=head1 DESCRIPTION
+
+This module aims to provide a nicer syntax and method to catch errors in Perl,
+similar to what is found in other languages (such as Java, Python or C++).  The
+standard method of using C<< eval {}; if ($@) {} >> is often prone to subtle
+bugs, primarily that its far too easy to stomp on the error in error handlers.
+And also eval/if isn't the nicest idiom.
 
 =head1 SYNOPSIS
 
@@ -379,22 +460,6 @@ Decide on C<finally> semantics w.r.t return values.
 Write some more documentation
 
 =back
-
-=head1 KNOWN BUGS
-
-Currently C<@_> is not accessible inside try or catch blocks, so assign this to
-a lexical variable outside if you wish to access function arguments. i.e.: 
-
- sub foo {
-   try { return $_[0] };
- }
-
-will not work, instead you must do something similar to this:
-
- sub foo {
-   my ($foo) = @_;
-   try { return $foo }
- }
 
 =head1 SEE ALSO
 

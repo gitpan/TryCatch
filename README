@@ -2,6 +2,13 @@ NAME
     TryCatch - first class try catch semantics for Perl, without source
     filters.
 
+DESCRIPTION
+    This module aims to provide a nicer syntax and method to catch errors in
+    Perl, similar to what is found in other languages (such as Java, Python
+    or C++). The standard method of using "eval {}; if ($@) {}" is often
+    prone to subtle bugs, primarily that its far too easy to stomp on the
+    error in error handlers. And also eval/if isn't the nicest idiom.
+
 SYNOPSIS
      use TryCatch;
 
@@ -76,22 +83,6 @@ TODO
     *   Decide on "finally" semantics w.r.t return values.
 
     *   Write some more documentation
-
-KNOWN BUGS
-    Currently @_ is not accessible inside try or catch blocks, so assign
-    this to a lexical variable outside if you wish to access function
-    arguments. i.e.:
-
-     sub foo {
-       try { return $_[0] };
-     }
-
-    will not work, instead you must do something similar to this:
-
-     sub foo {
-       my ($foo) = @_;
-       try { return $foo }
-     }
 
 SEE ALSO
     MooseX::Types, Moose::Util::TypeConstraints, Parse::Method::Signatures.

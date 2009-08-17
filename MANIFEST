@@ -6,10 +6,13 @@ inc/EUDeps/B/Hooks/OP/Check/Install/hook_op_check.h
 inc/EUDeps/B/Hooks/OP/PPAddr/Install/Files.pm
 inc/EUDeps/B/Hooks/OP/PPAddr/Install/hook_op_ppaddr.h
 inc/EUDeps/ExtUtils/Depends.pm
+inc/Module/AutoInstall.pm
 inc/Module/Install.pm
+inc/Module/Install/AutoInstall.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
 inc/Module/Install/Fetch.pm
+inc/Module/Install/Include.pm
 inc/Module/Install/Makefile.pm
 inc/Module/Install/Metadata.pm
 inc/Module/Install/Win32.pm
@@ -21,6 +24,8 @@ META.yml
 ppport.h
 README
 t/catch_01.t
+t/context.t
+t/destroy.t
 t/handwritten.t
 t/invalid.t
 t/lib/TryCatchTest.pm
