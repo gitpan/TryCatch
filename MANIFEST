@@ -28,8 +28,12 @@ t/context.t
 t/destroy.t
 t/handwritten.t
 t/invalid.t
+t/lib/NoType.pm
+t/lib/NoVarName.pm
 t/lib/TryCatchTest.pm
+t/method.t
 t/mx_types_structured.t
 t/nested.t
 t/simple.t
+t/types.t
 TryCatch.xs
