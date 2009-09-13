@@ -17,7 +17,7 @@ use XSLoader;
 use base qw/Devel::Declare::Context::Simple/;
 
 
-our $VERSION = '1.001001_999';
+our $VERSION = '1.002000';
 
 # These are private state variables. Mess with them at your peril
 our ($CHECK_OP_HOOK, $CHECK_OP_DEPTH) = (undef, 0);
@@ -281,6 +281,16 @@ sub parse_proto {
   return $self->parse_proto_using_pms($proto);
 }
 
+sub _string_to_tc {
+  my ($class, $name) = @_;
+
+  my $tc = $class->find_registered_constraint($name);
+
+  return $tc if ref $tc;
+
+  return Moose::Util::TypeConstraints::find_or_create_isa_type_constraint($name)
+}
+
 sub parse_proto_using_pms {
   my ($self, $proto) = @_;
 
@@ -289,6 +299,7 @@ sub parse_proto_using_pms {
   my $sig = Parse::Method::Signatures->new(
     input => $proto,
     from_namespace => $self->get_curstash_name,
+    type_constraint_callback => \&_string_to_tc,
   );
   my $errctx = $sig->ppi;
   my $param = $sig->param;
