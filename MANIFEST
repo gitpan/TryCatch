@@ -1,6 +1,6 @@
-bench.pl
-bench_ok.pl
 Changes
+eg/bench.pl
+eg/bench_ok.pl
 inc/EUDeps/B/Hooks/OP/Check/Install/Files.pm
 inc/EUDeps/B/Hooks/OP/Check/Install/hook_op_check.h
 inc/EUDeps/B/Hooks/OP/PPAddr/Install/Files.pm
@@ -21,6 +21,8 @@ lib/TryCatch.pm
 Makefile.PL
 MANIFEST			This list of files
 META.yml
+MYMETA.json
+MYMETA.yml
 ppport.h
 README
 t/catch_01.t
@@ -36,4 +38,5 @@ t/mx_types_structured.t
 t/nested.t
 t/simple.t
 t/types.t
+t/xml_sax_expat.t
 TryCatch.xs
