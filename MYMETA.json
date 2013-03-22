@@ -56,6 +56,12 @@
          }
       }
    },
+   "provides" : {
+      "TryCatch" : {
+         "file" : "lib/TryCatch.pm",
+         "version" : "1.003002"
+      }
+   },
    "release_status" : "stable",
    "resources" : {
       "license" : [
@@ -65,5 +71,5 @@
          "url" : "http://github.com/ashb/trycatch/tree/master"
       }
    },
-   "version" : "1.003001"
+   "version" : "1.003002"
 }
